@@ -1,0 +1,45 @@
+
+program : dfa_declaration;
+
+dfa_declaration: identifier,'=', '(' (formate_a | format_b) ')';
+
+
+#Tuple Multi-Line Definition
+formate_a= state_name, NEWLINE,
+            input_symbols, NEWLINE,
+            all_states, NEWLINE,
+            transition_func, NEWLINE,
+            start_s, NEWLINE
+            final_states, NEWLINE;
+
+#Tuple in-line definition
+formate_b='{', set_definition, '}', '{' set_definition, '}', 'δ', start_s, '{', final_states, '}';
+
+#Transition Table Layout (Row/Column Matrix)
+ "δ" , { symbol } , newline , { table_row } ;
+table_row= state_identifier , { destination_state } , newline ;
+
+
+
+all_states= 'Q', '=', set_definition ;
+input_symbol= 'Σ', '=', set_definition;
+transition_func= 'δ', '=', '(', Q', 'X'|'*', input, ')', '->', 'identifier';
+start_s= 'q0', '=', set_definition ;
+final_states= 'F', '=', set_definition;
+
+inline_transition= 'δ','('state_identifier, ',', symbol, ')', '=' destination_identifier, COMMA;
+
+
+#Core Elements
+set_definition= '{',identifier, (',' identifier)* '}';
+destination_identifier= identifier;
+state_identifier= identifier;
+identifier= ALPHANUMERIC;
+symbol = ALPHANUMERIC|δ|Σ;
+ALPHANUMERIC = [a-zA-Z][a-zA-Z0-9_];
+LETTERS = [a-zA-Z];
+NUMBERS = [0-9];
+NEWLINE = 'n\';
+COMMA = ',';
+
+
