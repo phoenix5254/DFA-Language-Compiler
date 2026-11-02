@@ -390,5 +390,5 @@ if __name__ == "__main__":
         ],
     }
 
-    result = analyze_dfa(sample_dfa)
+    result = analyze_dfa(sample_dfa )
     print_semantic_result(result)
