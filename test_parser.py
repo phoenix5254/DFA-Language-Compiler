@@ -1,38 +1,39 @@
-# test_parser_ply.py
-"""
-Tests for parser_ply.py. Run with:   python test_parser_ply.py
-(pytest also works, because every test is a function named test_...)
+# test_parser.py
 
-Each test lexes a small program with the PLY lexer (easyTokenizer.py), parses
-it, and - where it makes sense - passes the result on to semantic_analyzer.py
-to show that the three stages fit together.
-"""
+# Test script for parser.py.
+# Can run with pytest since all tests are functions beginning with test_.
 
-import easyTokenizer
+# Each test will lex a small program with the hand written lexer (myTokenizer.py),
+# parse it and if appropriate pass to semantic_analyzer.py to show that the
+# three components work together.
+
+
+from myTokenizer import Lexer
 from parser import parse
 from semantic_analyzer import analyze_dfa
 
 
 def lex(text):
-    """Lex with easyTokenizer. Fails the test if the lexer itself complains."""
-    lx = easyTokenizer.lexer
-    lx.input(text)
-    lx.lineno = 1
-    lx.has_error = False
-
-    found = []
-    while True:
-        tok = lx.token()
-        if not tok:
-            break
-        found.append(tok)
-
-    assert not lx.has_error, "unexpected lexical error"
+    # Lex with myTokenizer. Fails the test if the lexer itself complains.
+    found, error = Lexer(text).tokenizer()
+    assert error is None, f"unexpected lexical error: {error}"
     return found
 
 
-# easyTokenizer already attaches line numbers, so no stamping is needed.
-lex_with_lines = lex
+def lex_with_lines(text):
+    
+    # myTokenizer does not give tokens line numbers. The parser uses them when
+    # they exist (to say WHICH table row is too short), so to test that part,
+    # lex each line separately and add a .lineno to its tokens.
+    
+    found = []
+    line_number = 1
+    for line in text.split("\n"):
+        for tok in lex(line):
+            tok.lineno = line_number
+            found.append(tok)
+        line_number += 1
+    return found
 
 
 def codes(errors):
@@ -155,11 +156,11 @@ def test_definitions_may_follow_the_table():
     assert dfa["start_state"] == "s"
 
 
-def test_cross_written_as_identifier_X_like_the_ply_lexer_does():
+def test_cross_sign_written_as_identifier_X_is_still_accepted():
     tokens = lex("M = (Q, Σ, δ, q0, F) Q = {s} Σ = {a} δ = Q X Σ -> Q q0 = s F = {s} δ(s,a)=s")
     for tok in tokens:
         if tok.type == "CROSS":
-            tok.type = "IDENTIFIER"      # PLY's lexer already does this
+            tok.type = "IDENTIFIER"      # as if a lexer read X as a plain identifier
     dfa, errors = parse(tokens)
     assert errors == []
 
@@ -259,7 +260,7 @@ def test_extra_closing_bracket():
 
 
 # ------------------------------------------------------------
-# Line-aware checks (what happens with the PLY lexer)
+# Line-aware checks (used when the lexer provides line numbers)
 # ------------------------------------------------------------
 
 def test_row_too_short_is_reported_with_its_line_number():

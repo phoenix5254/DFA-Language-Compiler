@@ -1,76 +1,42 @@
 # parser.py
 """
 DFA Language Project
-Course: Analysis of Programming Languages (CIT4004)
+CIT4004 - Analysis of Programming Languages
+3
 
 
-Pipeline position: this is stage 2, built with PLY's yacc. It takes the
-tokens produced by the lexer (stage 1) and checks them against the grammar.
-If they match, it returns a plain Python dictionary for the semantic
-analyzer (stage 3). It does not judge whether the DFA is correct (missing or
-non-deterministic transitions, states that do not exist ...); that is the
-semantic analyzer's job.
+Stage 2 of the pipeline. Uses PLY's yacc module. Accepts tokens from the
+lexer (Stage 1). Parses according to the grammar and if it matches the
+input, returns a Python dictionary to be used by the semantic analyzer
+(Stage 3). The semantic analyzer checks for any validity issues with the
+DFA such as missing or non-deterministic transitions.
 
-The grammar rules are written as text (in the p_ functions below) and PLY
-generates the parser from them. Syntax problems are reported with the error
-codes PAR001 onwards (see ParserError).
+The following p_ functions define the grammar rules. A parser is generated
+by PLY. Any syntax errors will be reported with PAR001+
 
-The work is split in two parts:
+The parser consists of:
+1. The grammar rules (p_ functions). This gathers the matching input.
+2. A function called build_dfa(). This function parses through the statements
+in order. It ensures that nothing is used before it is defined. Transition
+tables are split into transitions. The DFA dictionary is built.
 
-    Part 1  The grammar (p_ functions). Each p_ function holds one rule in
-            its docstring and, in its body, collects the matching pieces.
-            No decisions about the DFA are made here.
-    Part 2  build_dfa(). Plain Python that walks the collected statements IN
-            ORDER, checks that nothing is used before it is defined, splits
-            transition tables into transitions, and builds the dictionary.
+The table rule is simply δ name as the lexer doesn't return NEWLINE tokens.
+The names are split into a header (one name for each symbol in Σ) and rows
+(label with one name for each symbol in Σ) in build_dfa().
 
-Grammar (BNF) used by Part 1:
+Q, Σ, δ, q0 and F are all given the KEYWORDS token by the lexer. They are
+converted to unique tokens (KW_Q, KW_SIGMA, KW_DELTA, KW_Q0, KW_F). q0 is
+considered a keyword if it is followed by '=' otherwise it is a name. X
+between Q and Σ is converted to CROSS. Otherwise it is a name.
 
-    program        : IDENTIFIER EQUAL named_tuple named_body
-                   | IDENTIFIER EQUAL inline_tuple inline_body
+Public API
+dfa, errors = parse(tokens)
 
-    named_tuple    : ( Q , Σ , δ , q0 , F )                       format A
-    inline_tuple   : ( name_set , name_set , δ , name , name_set )   format B
+tokens: Tokens from the lexer. Each has .type, .value (and optionally .lineno/.line).
+DFA: Dictionary to be used by analyze_dfa() in semantic_analyzer.py. None if there was an error.
+errors: List of ParserError objects. Empty if no errors.
 
-    named_body     : { definition | delta_decl | transition | table }
-    inline_body    : { transition | table }
-
-    definition     : ( Q | Σ | F ) = name_set
-                   | q0 = ( name | name_set )
-    delta_decl     : δ = Q CROSS Σ -> Q
-    transition     : δ ( name , name ) = name [ , ]
-    table          : δ name { name }       (split into header and rows later)
-
-    name_set       : { [ name { , name } ] }
-    name           : IDENTIFIER | NUMBER
-
-Why the table rule is just "δ followed by names":
-  Neither lexer produces NEWLINE tokens, so the grammar cannot see where the
-  header ends and where each row ends. Part 2 cuts the list of names into
-  pieces: the header has one name per symbol of Σ, and each row has one
-  label plus one name per symbol of Σ.
-
-How the lexer's tokens are prepared (see prepare_tokens):
-  - The lexer gives one token type, KEYWORDS, to Q, Σ, δ, q0 and F. A grammar
-    needs them to be different tokens, so each gets its own type (KW_Q,
-    KW_SIGMA, KW_DELTA, KW_Q0, KW_F) based on its text.
-  - q0 is a keyword but also the most common state name. It is treated as the
-    keyword only when "=" follows it ("q0 = q1"); everywhere else it is a name.
-  - The PLY lexer reads the letter X as an IDENTIFIER, so an X sitting between
-    Q and Σ is turned into the CROSS token. Anywhere else X stays a normal
-    name, so a symbol called X is still allowed.
-
-Public API:
-
-    dfa, errors = parse(tokens)
-
-        tokens : list of lexer tokens (anything with .type and .value; a
-                 .lineno or .line attribute is used when it exists)
-        dfa    : dictionary for analyze_dfa() in semantic_analyzer.py,
-                 or None when there are errors
-        errors : list of ParserError (empty when parsing succeeded)
-
-Running this file directly starts a small console demo (see run()).
+If this file is run, a small console demo will be run (run()).
 """
 
 import ply.yacc as yacc
@@ -129,18 +95,14 @@ PUNCTUATION_TEXT = {
 
 END_OF_PROGRAM = "<end of program>"
 
-# Which lexer the console demo uses: "easy" (easyTokenizer.py, built with
-# PLY) or "my" (myTokenizer.py, a plain Python lexer). The parser works with
-# both.
-LEXER_CHOICE = "easy"
-
 # ============================================================
 # Error Model
 # ============================================================
 
-# Every syntax error is reported in this one shape, so the rest of the
-# project can handle parser output uniformly. frozen=True: once returned, an
-# error cannot be changed by accident.
+# myTokenizer.py has no text for punctuation (None). This table
+# provides a consistent way for all syntax errors to be reported. So
+# the rest of the project can handle parser output consistently. Once
+# returned, it can't be accidentally modified (frozen=True).
 @dataclass(frozen=True)
 class ParserError:
     code: str
@@ -165,9 +127,9 @@ class ParserError:
         return f"[{self.code}] {self.message} ({where})"
 
 
-# Used to stop at the first error from anywhere inside PLY's machinery
-# (p_error, or an action). parse() catches it and turns it into a ParserError.
-# token=None means "the problem is at the end of the program".
+# Raised by any error in the PLY machinery (p_error or action). The
+# parse() method will catch this and turn it into a ParserError.
+# token=None indicates that the error was at the end of the program.
 class ParseFailure(Exception):
 
     def __init__(self, code, message, token=None):
@@ -178,7 +140,7 @@ class ParseFailure(Exception):
 
 
 def make_error(code, message, token):
-    """Build a ParserError that points at one token."""
+    # Build a ParserError that points at one token.
     return ParserError(
         code=code,
         message=message,
@@ -189,7 +151,7 @@ def make_error(code, message, token):
 
 
 def failure_to_error(failure, token_list):
-    """Turn a ParseFailure into a ParserError (placing end-of-program errors)."""
+    #Turn a ParseFailure into a ParserError (placing end-of-program errors)
     if failure.token is not None:
         return make_error(failure.code, failure.message, failure.token)
 
@@ -206,10 +168,11 @@ def failure_to_error(failure, token_list):
 # Token Preparation
 # ============================================================
 
-# PLY's parser reads tokens through an object with a token() method. This is
-# the token it is given: the lexer's token converted to the shape the grammar
-# needs. PLY looks for the attributes type and value (and lineno/lexpos for
-# its own bookkeeping); index is ours, used only for error reporting.
+# The parser in PLY uses an object which has a token() method to get tokens. The
+# token passed to it is the token from the lexer. It has been adjusted to fit
+# the format expected by the grammar. PLY looks for the type and value
+# attributes (and lineno/lexpos for internal use). The index is our own and
+# used only for error reporting.
 class FeedToken:
 
     def __init__(self, token_type, value, lineno, index):
@@ -241,15 +204,15 @@ class TokenFeed:
 
 
 def prepare_tokens(raw_tokens):
-    """
-    Convert lexer tokens into FeedTokens (see the notes at the top of the
-    file for why keywords are split into separate types).
+    
+    # Convert the tokens from the lexer into FeedTokens (see the comments at the top
+    # of the file for why keywords are split into separate types).
 
-    Both lexers are accepted: "RESERVED WORD" and "RESERVED_WORD" are treated
-    alike, NEWLINE tokens are dropped, and NUMBER values become strings (the
-    lexers turn "0" into the integer 0, and "01" becomes 1, so leading zeros
-    are lost).
-    """
+    # "RESERVED WORD" and "RESERVED_WORD" are treated the same. The NEWLINE
+    # tokens are removed. The NUMBER is converted into a string. The lexer converts
+    # "0" into 0 (an integer) and "01" into 1. So leading zeros will be lost.
+    
+
     # Step 1: simplify every token to (type, text, line).
     cleaned = []
 
@@ -265,8 +228,10 @@ def prepare_tokens(raw_tokens):
         else:
             text = str(raw.value)
 
-        # PLY tokens call it "lineno"; accept "line" too. getattr with a
-        # default means "use None if the attribute does not exist".
+        # Use line number from lexer (called 'lineno' or 'line'). myTokenizer.py
+        # does not provide line numbers, so line will be None. Errors will be
+        # reported by token number. getattr with default means use None if
+        # attribute does not exist.
         line = getattr(raw, "lineno", None)
         if line is None:
             line = getattr(raw, "line", None)
@@ -315,13 +280,14 @@ def prepare_tokens(raw_tokens):
 # Bracket Check
 # ============================================================
 
-# The brief requires brackets to be correctly ordered, matched and nested.
-# A stack does this exactly: push every opening bracket; every closing
-# bracket must match the one on top. It runs before the parser so that all
-# bracket mistakes are reported together, with clearer messages than
-# "unexpected token".
+# Correct bracketing.
+# A stack is used to ensure all brackets are properly balanced. Brackets
+# are pushed onto the stack if they are opening brackets. Closing
+# brackets must match the top of the stack. This is performed before
+# parsing so that all errors relating to brackets can be given at once,
+# with more descriptive error messages.
 def check_brackets(token_list):
-    """Return a list of ParserError for every bracket mistake (empty = fine)."""
+    #Return a list of ParserError for every bracket mistake (empty = fine).
     errors = []
     open_brackets = []
 
@@ -364,22 +330,24 @@ def check_brackets(token_list):
 # ============================================================
 # PART 1 - THE GRAMMAR
 #
-# PLY reads the docstring of every function whose name starts with p_ and
-# builds the parser from them. Rules:
-#   - the docstring is the grammar rule(s): "left side : right side"
-#   - p[1], p[2] ... are the values of the right-side symbols; p[0] is the
-#     value this rule produces
-#   - p.slice[n] is the token object itself (used to keep its line number)
-#   - the explanations are comments ABOVE each function, because the
-#     docstring is reserved for the rule
+# PLY parses all functions starting with p_. Each function's docstring
+# represents a rule. Rules:
+#  - THE rule is in THE form: "left side : right side"
+#  - p[1], p[2] ... are THE values of THE right hand side. p[0] will
+#   be THE value of this rule.
+#  - p.slice[n] is THE actual token object. It is used to store THE line
+#   number of THE token.
+#  - Comments are given ABOVE each function to explain what it does. The
+#   docstring is reserved for THE rule.
 # ============================================================
 
 # ---------------- program ----------------
+# Two different types of tuples, which means two different types of
 
-# Two forms of tuple lead to two kinds of body: definitions (Q = ..., δ = ...)
-# are only allowed after the named tuple, because the inline tuple already
-# contains everything. Keeping them as separate rules lets the grammar itself
-# enforce that. All the real work is handed to build_dfa().
+# bodies. Definitions (Q = ..., δ = ...) can only come after THE named
+# tuple as there is nothing to define in THE inline tuple. This is
+# enforced by having two separate rules. All of THE real work is done in
+# build_dfa().
 def p_program_named(p):
     'program : IDENTIFIER EQUAL named_tuple named_body'
     p[0] = build_dfa(p.slice[1], True, None, p[4])
@@ -392,9 +360,9 @@ def p_program_inline(p):
 
 # ---------------- the two tuples ----------------
 
-# Format A: only the five component names; their values come later.
-# The lexer prepared q0 as an ordinary name here (nothing "=" follows it), so
-# the fourth component is checked by its text.
+# Format A: just the component names. Their values are given below.
+# The lexer has generated q0 as a normal name with no '=' following it, so
+# the fourth component is tested for its text.
 def p_named_tuple(p):
     'named_tuple : LPAREN KW_Q COMMA KW_SIGMA COMMA KW_DELTA COMMA IDENTIFIER COMMA KW_F RPAREN'
     if p[8] != "q0":
@@ -580,7 +548,7 @@ def fail(code, message, token):
 
 
 def values_of(name_tokens):
-    """The text of each name token, in order (duplicates are kept)."""
+    # The text of each name token, in order (duplicates are kept).
     result = []
     for tok in name_tokens:
         result.append(tok.value)
@@ -588,11 +556,11 @@ def values_of(name_tokens):
 
 
 def require_delta_ready(named, defined, delta_token):
-    """
-    In the named format, transitions may only appear after 'δ = Q X Σ -> Q'
-    (which itself needs Q and Σ). In the inline format δ is already part of
-    the tuple, so there is nothing to check.
-    """
+    
+    # In the named format transitions can only appear after δ = Q X Σ -> Q
+    # (which requires Q and Σ). In the inline format δ is part of the tuple so
+    # there is nothing to check.
+    
     if named and "δ" not in defined:
         fail(
             "PAR006",
@@ -602,24 +570,24 @@ def require_delta_ready(named, defined, delta_token):
 
 
 def same_line(first_token, other_token):
-    """False only when both lines are known and they differ."""
+    # False only when both lines are known and they differ.
     if first_token.lineno is None or other_token.lineno is None:
         return True
     return first_token.lineno == other_token.lineno
 
 
 def add_table(dfa, delta_token, names):
-    """
-    Cut the flat list of names after δ into a header and rows, and turn the
-    rows into ordinary transitions (a table is only a neat way of writing many
-    δ(q,a)=r statements).
+    
+    #Split the flat list of names after δ into a header and rows. Convert the
+    #rows into normal transitions. A table is just a shorthand notation for
+    #many δ(q,a)=r statements.
 
-    Header : one name per symbol of Σ.
-    Row    : a state name followed by one destination per symbol of Σ.
+    #Header : One name per symbol in Σ.
+    #R  ow  : State name followed by one destination per symbol in Σ.
 
-    When the lexer gives line numbers, header and row entries must sit on
-    one line each, which gives a clear "row has too few entries" message.
-    """
+    #If your lexer provides line numbers then the header and row should be
+    #single lines. This way you get a clear error message if the row is too short.
+
     column_count = len(dfa["alphabet"])
 
     if column_count == 0:
@@ -676,13 +644,13 @@ def add_table(dfa, delta_token, names):
 
 
 def build_dfa(name_token, named, tuple_data, statements):
-    """
-    Build the dictionary for the semantic analyzer.
+    
+    #Dictionary to be used for the semantic analyzer.
 
-    named      : True for format A, False for format B
-    tuple_data : the values written inside the tuple (format B only)
-    statements : the statements after the tuple, in the order written
-    """
+    #named = True if it is a format A, False otherwise
+    #tuple_data = values inside the tuple (only format B)
+    #statements = statements found after the tuple (in order)
+    
     dfa = {
         "name": name_token.value,
         "states": [],
@@ -802,15 +770,15 @@ def build_dfa(name_token, named, tuple_data, statements):
 # ============================================================
 
 def parse(raw_tokens):
-    """
-    Check the tokens against the grammar.
+    
+    # Ensure that the tokens are grammatically correct.
 
-    Returns (dfa, errors):
-        success -> (dictionary for the semantic analyzer, [])
-        failure -> (None, [ParserError, ...])
+    # Returns a tuple with (dfa, errors)
+    # If successful, returns (dictionary for semantic analyzer, empty list)
+    # If unsuccessful, returns (None, [ParserError, ...])
 
-    The caller should not run the semantic analyzer when errors is not empty.
-    """
+    # Do not perform semantic analysis if there are any errors.
+    
     token_list = prepare_tokens(raw_tokens)
 
     # Bracket mistakes first: all are reported at once and the real parse is
@@ -852,21 +820,25 @@ q3 Trap q4 q3
 q4 Trap Trap Trap
 Trap Trap Trap Trap
 """,
+
     "Format B, one line of transitions (from the brief)": """\
 M = ({q1, q2, q3, q4, Trap}, {a, b, c}, δ, q1, {q4})
 δ(q1,a)=q2 δ(q1,b)=q3 δ(q1,c)=Trap δ(q2,a)=q4 δ(q2,b)=Trap δ(q2,c)=q2
 δ(q3,a)=Trap δ(q3,b)=q4 δ(q3,c)=q3 δ(q4,a)=Trap δ(q4,b)=Trap δ(q4,c)=Trap
 δ(Trap,a)=Trap δ(Trap,b)=Trap δ(Trap,c)=Trap
 """,
+
     "Error: δ used before Σ is defined": """\
 M = (Q, Σ, δ, q0, F)
 Q = {q1, q2}
 δ = Q X Σ -> Q
 Σ = {a, b}
 """,
+
     "Error: bracket never closed": """\
 M = ({q1, q2, {a, b}, δ, q1, {q2})
 """,
+
     "Error: transition table row too short": """\
 M = ({q1, q2}, {a, b}, δ, q1, {q2})
 δ a b
@@ -877,31 +849,12 @@ q2 q2 q2
 
 
 def get_tokens(text):
-    """
-    Run one of the lexers. Returns (tokens, lexical_error_messages).
+    
+    #Run the lexer (myTokenizer.py). Returns (tokens, lexical_error_messages).
 
-    The import happens inside the function so that this file still loads
-    when only one of the two lexers is usable.
-    """
-    if LEXER_CHOICE == "easy":
-        import easyTokenizer
-
-        lx = easyTokenizer.lexer
-        lx.input(text)
-        lx.lineno = 1
-        lx.has_error = False
-
-        found = []
-        while True:
-            tok = lx.token()
-            if not tok:
-                break
-            found.append(tok)
-
-        if lx.has_error:
-            return [], ["Lexical error (details were printed above by easyTokenizer)"]
-        return found, []
-
+    #The import happens inside the function so that this file still loads
+    #when myTokenizer.py is missing.
+    
     from myTokenizer import Lexer
 
     found, error = Lexer(text).tokenizer()
@@ -911,7 +864,7 @@ def get_tokens(text):
 
 
 def print_dfa(dfa):
-    """Show the dictionary that is handed to the semantic analyzer."""
+    # Show the dictionary that is handed to the semantic analyzer.
     print("  name        :", dfa["name"])
     print("  states      :", dfa["states"])
     print("  alphabet    :", dfa["alphabet"])
@@ -923,7 +876,7 @@ def print_dfa(dfa):
 
 
 def process(text):
-    """Lex, parse and (if possible) semantically check one program."""
+    # Lex, parse and (if possible) semantically check one program.
     print("\n--- Program ---")
     print(text)
 
