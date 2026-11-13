@@ -1,45 +1,39 @@
 
-program : dfa_declaration;
+<program> := <dfa_declaration>
 
-dfa_declaration: identifier,'=', '(' (formate_a | format_b) ')';
+<dfa_declaration>:= <identifier> '=' (<formate_a> | <format_b>)
 
 
 #Tuple Multi-Line Definition
-formate_a= state_name, NEWLINE,
-            input_symbols, NEWLINE,
-            all_states, NEWLINE,
-            transition_func, NEWLINE,
-            start_s, NEWLINE
-            final_states, NEWLINE;
+formate_a:= <LETTERS> '=' '(' <all_states_symbols> ',' <input_symbols> ',' <transition_symbol> ',' <start_state_symbol> ',' <final_states_symbols> ) '\n'
+                            <transition_function> '\n'            
 
 #Tuple in-line definition
-formate_b='{', set_definition, '}', '{' set_definition, '}', 'δ', start_s, '{', final_states, '}';
-
-#Transition Table Layout (Row/Column Matrix)
- "δ" , { symbol } , newline , { table_row } ;
-table_row= state_identifier , { destination_state } , newline ;
+formate_b:= <LETTERS> '=''(' <set_definition> ',' <set_definition> ',' <transition_symbol> ',' <start_s> ',' <final_states> ')' 
+                            '\n' <transition_function> '\n'
 
 
 
-all_states= 'Q', '=', set_definition ;
-input_symbol= 'Σ', '=', set_definition;
-transition_func= 'δ', '=', '(', Q', 'X'|'*', input, ')', '->', 'identifier';
-start_s= 'q0', '=', set_definition ;
-final_states= 'F', '=', set_definition;
+<all_states>:= <LETTERS> '=' set_definition 
+<transition_function>:= <transition_symbol> ( '('<identifier> ',' <identifier> ')' ('='|'->') <identifier> (',')* )+
+                    | '('<transition_symbol>  '*' <identifier> ('='|'->') <identifier> (',')* )+
 
-inline_transition= 'δ','('state_identifier, ',', symbol, ')', '=' destination_identifier, COMMA;
+<start_s>:= <identifier> 
+<final_states>:= <set_definition>
+<all_states_symbols>:= <LETTERS> '=' <set_definition> '\n'
+<input_symbols>:= <LETTERS> '=' <set_definition> '\n'
+<start_state_symbol>:= <LETTERS> '=' <identifier> '\n'
+<final_states_symbols>:= <LETTERS> '=' <set_definition> '\n'
+
+
 
 
 #Core Elements
-set_definition= '{',identifier, (',' identifier)* '}';
-destination_identifier= identifier;
-state_identifier= identifier;
-identifier= ALPHANUMERIC;
-symbol = ALPHANUMERIC|δ|Σ;
-ALPHANUMERIC = [a-zA-Z][a-zA-Z0-9_];
-LETTERS = [a-zA-Z];
-NUMBERS = [0-9];
-NEWLINE = 'n\';
-COMMA = ',';
+<set_definition>:= '{' <identifier>* '}'
+<identifier>:= <ALPHANUMERIC>
+<transition_symbol>:= 'delta' | 'DELTA' | 'δ'
+<ALPHANUMERIC> := [a-zA-Z][a-zA-Z0-9_]
+<LETTERS> := [a-zA-Z]
+<NUMBERS> := [0-9]
 
 

@@ -2,10 +2,8 @@ from enum import Enum
 import string
 
 # CONSTANTS
-# Added Greek letters to LETTERS to fully support any valid state definitions
 LETTERS = string.ascii_letters + '_' + 'δ' + 'Σ'
 ALPHANUMERIC = LETTERS + string.digits 
-#SYMBOLS= LETTERS + string.digits+'δ' + 'Σ'
 NUMBERS = r'0123456789'
 
 # KEYWORDS & RESERVED WORDS 
@@ -13,24 +11,23 @@ RESERVE_WORDS = [
     'WHILE', 'IF', 'ELSE', 'FOR', 'RETURN', 'FUNCTION', 'VAR', 'LET', 'CONST'
 ]
 KEYWORDS = [
-    # Math 5-tuple reserves in order (Set of All States, Input Symbols, Set of Accepting States, Transition Function, Start State)
-    'Q', 'Σ', 'F', 'δ', 'q0'
+    'Q', 'Σ', 'F', 'δ', 'q0', 'delta', 'DELTA'
 ]
 
 # TokenTypes
 class TT(Enum):
     T_Identifier = 'IDENTIFIER'
     T_Keyword = 'KEYWORDS'
-    T_Reserved = 'RESERVED WORD'      
+    T_Reserved = 'RESERVED WORD'        
     T_Number = 'NUMBER'
     T_Arrow = 'ARROW'
     T_Comma = 'COMMA'
-    T_Cross = 'CROSS'           
-    T_OpenBracket = 'LBRACE'     # '{'
-    T_CloseBracket = 'RBRACE'    # '}'
-    T_LPAREN = 'LPAREN'          # '('
-    T_RPAREN = 'RPAREN'          # ')'
-    T_EQUAL = 'EQUAL'            # '='
+    T_Cross = 'CROSS'             
+    T_OpenBracket = 'LBRACE'    # '{'
+    T_CloseBracket = 'RBRACE'   # '}'
+    T_LPAREN = 'LPAREN'         # '('
+    T_RPAREN = 'RPAREN'         # ')'
+    T_EQUAL = 'EQUAL'           # '='
 
 # Position tracking block for error handling
 class PositionInfo:
@@ -63,12 +60,12 @@ class Lexer:
     def __init__(self, text):
         self.text = text
         self.position = -1 
-        self.ln = 0               # Track line changes
+        self.ln = 0                # Track line changes
         self.current_char = None
         self.advance()
 
     def advance(self):
-        self.position += 1 # Move to the next character
+        self.position += 1
         if self.current_char == '\n':
             self.ln += 1 
         self.current_char = self.text[self.position] if self.position < len(self.text) else None  
@@ -76,8 +73,8 @@ class Lexer:
     def tokenizer(self):
         tokens = []
         while self.current_char != None:
-            if self.current_char in ' \t\n': 
-                self.advance()
+            if self.current_char.isspace(): 
+               self.advance()
             elif self.current_char == '=':
                 tokens.append(Token(TT.T_EQUAL.value))
                 self.advance()
@@ -96,11 +93,10 @@ class Lexer:
             elif self.current_char == ')':
                 tokens.append(Token(TT.T_RPAREN.value))
                 self.advance()
-                #CROSS SYMBOLS: 'X' or '*' are treated as cross symbols for set operations
+            # Restored 'X' along with '*' for set cross products (e.g., Q X Σ)
             elif self.current_char in ('X', '*'):
                 tokens.append(Token(TT.T_Cross.value, self.current_char))
                 self.advance()
-            # Arrow parsing mechanism reads '-' followed by '>'
             elif self.current_char == '-':
                 self.advance()
                 if self.current_char == '>':
@@ -156,21 +152,31 @@ class Lexer:
 # Run
 def run():
     while True:
-        choice=input("\nChoose an option:\n1. Single-Line DFA Specification\n2. Multi-Line DFA Specification\n3. Exit\nEnter choice (1, 2, or 3): ")
+        prompt = (
+            "\nChoose an option:\n"
+            "1. Single-Line DFA Specification\n"
+            "2. Multi-Line DFA Specification\n"
+            "3. Exit\n"
+            "Enter choice (1, 2, or 3): "
+        )
+        choice = input(prompt)
         try:
             choice = int(choice)
         except ValueError:
             print("Invalid input. Please enter a number (1, 2, or 3).")
             continue
+            
+        if choice == 3:
+            break
+            
         if choice in (1, 2):
-            print("\nEnter DFA Specification as 5-tuple M=({Q, Σ, δ, q0, F})")
+            print("\nEnter DFA Specification:")
             try:
                 if choice == 1:
                     text = input()
                     if text.strip() in ('', 'exit'):
                         break
                 else:
-                    print("DFA name = ({Set of States}, {Input Symbols}, δ, starting state, {Final States}):")
                     print("Type 'exit' on a new line to finish input.")
                     lines = []
                     while True:
@@ -183,7 +189,6 @@ def run():
                 lexer = Lexer(text)
                 tokens, error = lexer.tokenizer()
             
-                # FIX: Only attempt loop prints if error is absent, otherwise catch and display diagnostics
                 if error:
                     print("\n", error)
                 else:
