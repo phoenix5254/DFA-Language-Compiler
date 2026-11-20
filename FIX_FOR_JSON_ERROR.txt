@@ -1,0 +1,1 @@
+The adapter now implements to_dict(), required by the supplied semantic analyzer when a DFA is valid. The route catches unexpected exceptions and returns JSON diagnostics. The browser checks response content type before parsing JSON. Replace the old extracted folder with this fixed folder and restart Flask.
