@@ -4,7 +4,6 @@
 <dfa_declaration>:= <identifier> '=' (<formate_a> | <format_b>)
 
 
-#Tuple Multi-Line Definition
 formate_a:= <LETTERS> '=' '(' <all_states_symbols> ',' <input_symbols> ',' <transition_symbol> ',' <start_state_symbol> ',' <final_states_symbols> ) '\n'
                             <transition_function> '\n'            
 
@@ -26,9 +25,6 @@ formate_b:= <LETTERS> '=''(' <set_definition> ',' <set_definition> ',' <transiti
 <final_states_symbols>:= <LETTERS> '=' <set_definition> '\n'
 
 
-
-
-#Core Elements
 <set_definition>:= '{' <identifier>* '}'
 <identifier>:= <ALPHANUMERIC>
 <transition_symbol>:= 'delta' | 'DELTA' | 'δ'
